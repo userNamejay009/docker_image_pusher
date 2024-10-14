@@ -7,3 +7,4 @@ xhofe/alist:latest
 notary:server
 alpine
 golang:1.17.13-alpine
+mariadb:10.4
