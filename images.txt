@@ -9,3 +9,5 @@ alpine
 golang:1.17.13-alpine
 mariadb:10.4
 notary:signer
+dgeiger/notary-migrate:master
+dgeiger/notary-mariadb:latest
