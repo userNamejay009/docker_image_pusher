@@ -11,4 +11,4 @@ mariadb:10.4
 notary:signer
 dgeiger/notary-migrate:master
 dgeiger/notary-mariadb:master
-notary:notary
+notary-binary:latest
