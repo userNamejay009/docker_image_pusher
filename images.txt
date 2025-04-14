@@ -1,15 +1,15 @@
-nginx
+# nginx
 #支持私库
-k8s.gcr.io/kube-state-metrics/kube-state-metrics:v2.0.0
-xhofe/alist:latest
+#k8s.gcr.io/kube-state-metrics/kube-state-metrics:v2.0.0
+#xhofe/alist:latest
 #支持指定架构
---platform=linux/arm64 xiaoyaliu/alist
-notary:server
-alpine
-golang:1.17.13-alpine
-mariadb:10.4
-notary:signer
-dgeiger/notary-migrate:master
-dgeiger/notary-mariadb:master
-dgeiger/notary-wrapper:0.0.1
-n8n
+#--platform=linux/arm64 xiaoyaliu/alist
+#notary:server
+#alpine
+#golang:1.17.13-alpine
+#mariadb:10.4
+#notary:signer
+#dgeiger/notary-migrate:master
+#dgeiger/notary-mariadb:master
+#dgeiger/notary-wrapper:0.0.1
+docker.io/n8nio/n8n:latest
