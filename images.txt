@@ -12,3 +12,4 @@ notary:signer
 dgeiger/notary-migrate:master
 dgeiger/notary-mariadb:master
 dgeiger/notary-wrapper:0.0.1
+n8n
