@@ -14,3 +14,4 @@
 #dgeiger/notary-wrapper:0.0.1
 #docker.io/n8nio/n8n:latest
 --platform=linux/arm64 ricardbejarano/haproxy_exporter:latest
+--platform=linux/arm64 golang:1.20
