@@ -16,11 +16,15 @@
 #--platform=linux/arm64 ricardbejarano/haproxy_exporter:latest
 #--platform=linux/arm64 golang:1.20
 langgenius/dify-api:1.4.1
+langgenius/dify-api:1.4.1
+langgenius/dify-web:1.4.1
 postgres:15-alpine
-nginx:latest
-langgenius/dify-plugin-daemon:0.1.1-local
 redis:6-alpine
 langgenius/dify-sandbox:0.2.12
+langgenius/dify-plugin-daemon:0.1.1-local
 ubuntu/squid:latest
+certbot/certbot
+nginx:latest
 semitechnologies/weaviate:1.19.0
-langgenius/dify-web:1.4.1
+langgenius/qdrant:v1.7.3
+pgvector/pgvector:pg16
