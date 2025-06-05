@@ -13,5 +13,14 @@
 #dgeiger/notary-mariadb:master
 #dgeiger/notary-wrapper:0.0.1
 #docker.io/n8nio/n8n:latest
---platform=linux/arm64 ricardbejarano/haproxy_exporter:latest
---platform=linux/arm64 golang:1.20
+#--platform=linux/arm64 ricardbejarano/haproxy_exporter:latest
+#--platform=linux/arm64 golang:1.20
+langgenius/dify-api:1.4.1
+postgres:15-alpine
+nginx:latest
+langgenius/dify-plugin-daemon:0.1.1-local
+redis:6-alpine
+langgenius/dify-sandbox:0.2.12
+ubuntu/squid:latest
+semitechnologies/weaviate:1.19.0
+langgenius/dify-web:1.4.1
