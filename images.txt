@@ -63,3 +63,5 @@
 #docker.elastic.co/kibana/kibana:8.14.3
 #downloads.unstructured.io/unstructured-io/unstructured-api:latest
 langgenius/dify-web:1.11.2
+mysql:8.0
+redis:7-alpine
