@@ -65,3 +65,4 @@
 langgenius/dify-web:1.11.2
 mysql:8.0
 redis:7-alpine
+docker-container:mybuilder
