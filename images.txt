@@ -65,4 +65,4 @@
 # langgenius/dify-web:1.11.2
 # mysql:8.0
 # redis:7-alpine
-moby/buildkit:buildx-stable-1
+docker.io/library/node:20-alpine
