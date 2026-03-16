@@ -66,3 +66,4 @@
 # mysql:8.0
 # redis:7-alpine
 docker.io/library/node:20-alpine
+minio/minio:RELEASE.2025-02-28T09-55-16Z
