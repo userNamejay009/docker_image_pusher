@@ -65,5 +65,5 @@
 # langgenius/dify-web:1.11.2
 # mysql:8.0
 # redis:7-alpine
-docker.io/library/node:20-alpine
-minio/minio:RELEASE.2025-02-28T09-55-16Z
+docker.io/library/node:24-alpine
+# minio/minio:RELEASE.2025-02-28T09-55-16Z
