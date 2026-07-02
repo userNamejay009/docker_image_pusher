@@ -68,4 +68,11 @@
 docker.io/library/node:24-alpine
 # minio/minio:RELEASE.2025-02-28T09-55-16Z
 # alphacep/kaldi-cantonese:latest
-gpustack/mirrored-higress-higress:2.1.9
+# gpustack/mirrored-higress-higress:2.1.9
+gpustack/gpustack-operator:v0.5.1
+gpustack/mirrored-higress-api-server:0.0.26
+# gpustack/mirrored-higress-higress:2.1.9
+gpustack/mirrored-higress-pilot:2.1.9
+gpustack/mirrored-higress-gateway:2.1.9
+ubuntu:24.04
+rocm/dev-ubuntu-22.04:7.0.2
