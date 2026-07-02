@@ -67,4 +67,5 @@
 # redis:7-alpine
 docker.io/library/node:24-alpine
 # minio/minio:RELEASE.2025-02-28T09-55-16Z
-alphacep/kaldi-cantonese:latest
+# alphacep/kaldi-cantonese:latest
+gpustack/mirrored-higress-higress:2.1.9
