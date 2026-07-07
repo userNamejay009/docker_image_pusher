@@ -77,4 +77,5 @@
 #ubuntu:24.04
 #rocm/dev-ubuntu-22.04:7.0.2
 # --platform=linux/arm64 gpustack/gpustack:latest
---platform linux/arm64 gpustack/gpustack:latest
+# --platform linux/arm64 gpustack/gpustack:latest
+--platform linux/arm64 eclipse-temurin:8-jre
