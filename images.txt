@@ -80,3 +80,4 @@
 # --platform linux/arm64 gpustack/gpustack:latest
 # --platform linux/arm64 eclipse-temurin:8-jre
 harness/harness
+python:3.12-slim
