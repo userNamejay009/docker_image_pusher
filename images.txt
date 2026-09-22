@@ -82,3 +82,4 @@
 harness/harness
 python:3.12-slim
 binwiederhier/ntfy:latest
+finab/bark-server:latest
