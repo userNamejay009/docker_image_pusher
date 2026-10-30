@@ -1,0 +1,208 @@
+name: Artifactory Node.js Patch (Manual)
+
+# This workflow only builds an experimental downstream patch image.
+# It does not deploy Artifactory or verify a production database migration.
+on:
+  workflow_dispatch:
+    inputs:
+      amd64_base_image:
+        description: 'AMD64 Artifactory OSS 7.161.26 image (tag or digest)'
+        required: true
+        default: 'releases-docker.jfrog.io/jfrog/artifactory-oss:7.161.26'
+        type: string
+      arm64_base_image:
+        description: 'ARM64 Artifactory OSS 7.161.26 image (tag or digest)'
+        required: true
+        default: 'releases-docker.jfrog.io/jfrog/artifactory-oss:7.161.26'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: artifactory-node-patch
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build and check ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            node_arch: x64
+            runner: ubuntu-24.04
+            node_sha256: 1805bcd35e6815559bd2eb97db438d3fdb0eb3a5e6a977b7c1badca76337e9ce
+          - arch: arm64
+            node_arch: arm64
+            runner: ubuntu-24.04-arm
+            node_sha256: 6287aa46b6c375d816e63ae66d024fbbfd70404825aabdfdf898a970871d2f4b
+    env:
+      ARCH: ${{ matrix.arch }}
+      NODE_ARCH: ${{ matrix.node_arch }}
+      NODE_SHA256: ${{ matrix.node_sha256 }}
+      BASE_IMAGE: ${{ matrix.arch == 'amd64' && inputs.amd64_base_image || inputs.arm64_base_image }}
+      REGISTRY: ${{ secrets.ALIYUN_REGISTRY }}
+      NAMESPACE: ${{ secrets.ALIYUN_NAME_SPACE }}
+    steps:
+      # No checkout, third-party Actions, or privileged QEMU setup is needed.
+      - name: Validate settings and log in to Aliyun
+        env:
+          REGISTRY_USER: ${{ secrets.ALIYUN_REGISTRY_USER }}
+          REGISTRY_PASSWORD: ${{ secrets.ALIYUN_REGISTRY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          export DOCKER_CONFIG="$RUNNER_TEMP/artifactory-docker-auth"
+          echo "DOCKER_CONFIG=$DOCKER_CONFIG" >> "$GITHUB_ENV"
+          : "${REGISTRY:?Set ALIYUN_REGISTRY in Repository secrets}"
+          : "${NAMESPACE:?Set ALIYUN_NAME_SPACE in Repository secrets}"
+          : "${REGISTRY_USER:?Set ALIYUN_REGISTRY_USER in Repository secrets}"
+          : "${REGISTRY_PASSWORD:?Set ALIYUN_REGISTRY_PASSWORD in Repository secrets}"
+          [[ "$REGISTRY" =~ ^[a-z0-9][a-z0-9.-]*(:[0-9]+)?$ ]] || { echo 'Registry must be a hostname, without https:// or a path'; exit 1; }
+          [[ "$NAMESPACE" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || { echo 'Invalid registry namespace'; exit 1; }
+          [[ -n "$BASE_IMAGE" && "$BASE_IMAGE" != -* && "$BASE_IMAGE" != *[[:space:]]* ]] || { echo 'Invalid base image reference'; exit 1; }
+          mkdir -p "$DOCKER_CONFIG"
+          chmod 700 "$DOCKER_CONFIG"
+          printf '%s' "$REGISTRY_PASSWORD" | docker login "$REGISTRY" --username "$REGISTRY_USER" --password-stdin
+
+      - name: Pull and verify base image
+        run: |
+          set -euo pipefail
+          docker pull --platform "linux/$ARCH" "$BASE_IMAGE"
+          base_id=$(docker image inspect "$BASE_IMAGE" --format '{{.Id}}')
+          actual_arch=$(docker image inspect "$base_id" --format '{{.Architecture}}')
+          [[ "$actual_arch" == "$ARCH" ]] || { echo "Expected $ARCH, got $actual_arch"; exit 1; }
+          # Use the inspected local image ID, so a moving source tag cannot change the build.
+          docker tag "$base_id" artifactory-patch-base:verified
+          properties=$(docker run --rm --network none --entrypoint /bin/sh "$base_id" -c \
+            'cat /opt/jfrog/artifactory/app/artifactory.product.version.properties')
+          printf '%s\n' "$properties"
+          printf '%s\n' "$properties" | tr -d '\r' | grep -qx 'artifactory.product.version=7.161.26'
+          {
+            echo "### Base image ($ARCH)"
+            echo "- Image ID: \`$base_id\`"
+            echo '- Resolved repository digests:'
+            docker image inspect "$base_id" --format '{{json .RepoDigests}}'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download and verify official Node.js binary
+        run: |
+          set -euo pipefail
+          # Hashes are pinned from https://nodejs.org/en/blog/release/v22.23.4
+          archive="node-v22.23.4-linux-${NODE_ARCH}.tar.xz"
+          curl --fail --show-error --location --retry 3 --connect-timeout 30 --max-time 600 \
+            "https://nodejs.org/dist/v22.23.4/$archive" -o "$archive"
+          printf '%s  %s\n' "$NODE_SHA256" "$archive" | sha256sum --check --strict -
+          tar -xJf "$archive" "node-v22.23.4-linux-${NODE_ARCH}/bin/node"
+          mkdir -p patch-context
+          install -m 0755 "node-v22.23.4-linux-${NODE_ARCH}/bin/node" patch-context/node
+
+      - name: Build patch image
+        run: |
+          set -euo pipefail
+          cat > patch-context/Dockerfile <<'DOCKERFILE'
+          FROM artifactory-patch-base:verified
+          LABEL org.opencontainers.image.description="Unofficial Artifactory OSS 7.161.26 downstream Node.js 22.23.4 patch; validate before deployment"
+          COPY --chown=1030:1030 node /opt/jfrog/artifactory/app/third-party/node/bin/node
+          RUN /opt/jfrog/artifactory/app/third-party/node/bin/node -v
+          DOCKERFILE
+          docker build --network none \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            -t artifactory-nodepatch:checked patch-context
+
+      - name: Check Node.js and Java without starting Artifactory
+        run: |
+          set -euo pipefail
+          # Preserve the base image's default user and security settings.
+          version=$(timeout 120 docker run --rm --network none \
+            --entrypoint /opt/jfrog/artifactory/app/third-party/node/bin/node \
+            artifactory-nodepatch:checked -p 'process.version + " " + process.arch')
+          [[ "$version" == "v22.23.4 $NODE_ARCH" ]] || { echo "Unexpected Node.js: $version"; exit 1; }
+          timeout 120 docker run --rm --network none --entrypoint /bin/sh \
+            artifactory-nodepatch:checked -c \
+            'if [ -n "$JAVA_HOME" ]; then "$JAVA_HOME/bin/java" --version; else java --version; fi'
+          base_user=$(docker image inspect artifactory-patch-base:verified --format '{{.Config.User}}')
+          patched_user=$(docker image inspect artifactory-nodepatch:checked --format '{{.Config.User}}')
+          [[ "$base_user" == "$patched_user" ]]
+          echo "Node.js $version and Java startup checks passed; Artifactory application/database NOT tested." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push checked architecture image
+        run: |
+          set -euo pipefail
+          tag="7.161.26-node22.23.4-run${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          image="$REGISTRY/$NAMESPACE/artifactory-oss:${tag}-$ARCH"
+          docker tag artifactory-nodepatch:checked "$image"
+          docker push "$image"
+          echo "Architecture image: \`$image\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove registry credentials
+        if: always()
+        run: |
+          if [[ -n "$REGISTRY" ]]; then docker logout "$REGISTRY" || true; fi
+          rm -f "$DOCKER_CONFIG/config.json"
+
+  publish:
+    name: Publish multi-architecture image
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      REGISTRY: ${{ secrets.ALIYUN_REGISTRY }}
+      NAMESPACE: ${{ secrets.ALIYUN_NAME_SPACE }}
+    steps:
+      - name: Log in to Aliyun
+        env:
+          REGISTRY_USER: ${{ secrets.ALIYUN_REGISTRY_USER }}
+          REGISTRY_PASSWORD: ${{ secrets.ALIYUN_REGISTRY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          export DOCKER_CONFIG="$RUNNER_TEMP/artifactory-docker-auth"
+          echo "DOCKER_CONFIG=$DOCKER_CONFIG" >> "$GITHUB_ENV"
+          mkdir -p "$DOCKER_CONFIG"
+          chmod 700 "$DOCKER_CONFIG"
+          printf '%s' "$REGISTRY_PASSWORD" | docker login "$REGISTRY" --username "$REGISTRY_USER" --password-stdin
+
+      - name: Publish and verify manifests
+        run: |
+          set -euo pipefail
+          repo="$REGISTRY/$NAMESPACE/artifactory-oss"
+          release_tag=7.161.26-node22.23.4
+          run_tag="${release_tag}-run${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          # Both architecture jobs must pass before either shared tag is published.
+          for tag in "$run_tag" "$release_tag"; do
+            docker manifest create "$repo:$tag" "$repo:$run_tag-amd64" "$repo:$run_tag-arm64"
+            docker manifest inspect "$repo:$tag" > manifest.json
+            python3 - <<'PY'
+          import json
+          with open("manifest.json") as stream:
+              manifest = json.load(stream)
+          platforms = {(item["platform"]["os"], item["platform"]["architecture"])
+                       for item in manifest["manifests"]}
+          assert platforms == {("linux", "amd64"), ("linux", "arm64")}, platforms
+          PY
+            docker manifest push --purge "$repo:$tag" | tee manifest-digest.txt
+            {
+              echo "### Published image: $tag"
+              echo '```bash'
+              echo "docker pull $repo:$tag"
+              echo '```'
+              echo 'Registry push result:'
+              cat manifest-digest.txt
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
+          echo 'Use the run-specific tag/digest for reproducible testing. The shorter tag is updated by each successful run.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'This is a downstream patch image, not an official JFrog release. No production deployment or Derby migration was performed.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove registry credentials
+        if: always()
+        run: |
+          if [[ -n "$REGISTRY" ]]; then docker logout "$REGISTRY" || true; fi
+          rm -f "$DOCKER_CONFIG/config.json"
