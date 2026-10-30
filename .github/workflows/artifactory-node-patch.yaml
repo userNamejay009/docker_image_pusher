@@ -126,9 +126,28 @@ jobs:
             --entrypoint /opt/jfrog/artifactory/app/third-party/node/bin/node \
             artifactory-nodepatch:checked -p 'process.version + " " + process.arch')
           [[ "$version" == "v22.23.4 $NODE_ARCH" ]] || { echo "Unexpected Node.js: $version"; exit 1; }
-          timeout 120 docker run --rm --network none --entrypoint /bin/sh \
-            artifactory-nodepatch:checked -c \
-            'if [ -n "$JAVA_HOME" ]; then "$JAVA_HOME/bin/java" --version; else java --version; fi'
+          # The normal entrypoint sets up Java; bypassing it may leave JAVA_HOME/PATH empty.
+          # Resolve the bundled JDK without starting Artifactory or relaxing security.
+          timeout 120 docker run --rm -i --network none --entrypoint /bin/sh \
+            artifactory-nodepatch:checked -s <<'JAVA_CHECK'
+          set -eu
+          for java_bin in \
+            "${JAVA_HOME:-/nonexistent}/bin/java" \
+            /opt/jfrog/artifactory/app/third-party/java*/bin/java \
+            /opt/jfrog/artifactory/app/third-party/jdk*/bin/java \
+            /opt/java/openjdk/bin/java; do
+            if [ -x "$java_bin" ]; then
+              printf 'Checking Java at %s\n' "$java_bin"
+              exec "$java_bin" --version
+            fi
+          done
+          if command -v java >/dev/null 2>&1; then
+            exec java --version
+          fi
+          echo 'No executable Java found in JAVA_HOME, bundled JDK paths, or PATH.' >&2
+          ls -ld /opt/jfrog/artifactory/app/third-party/* 2>/dev/null || true
+          exit 127
+          JAVA_CHECK
           base_user=$(docker image inspect artifactory-patch-base:verified --format '{{.Config.User}}')
           patched_user=$(docker image inspect artifactory-nodepatch:checked --format '{{.Config.User}}')
           [[ "$base_user" == "$patched_user" ]]
